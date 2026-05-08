@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { KPICard } from '@/components/ui/KPICard'
@@ -11,6 +12,19 @@ export default function CRMPage() {
     queryKey: ['crm'],
     queryFn: api.crm.getData,
   })
+
+  const [selectedOwner, setSelectedOwner] = useState<string>('All')
+
+  const owners = useMemo(() => {
+    if (!data) return []
+    return ['All', ...Array.from(new Set(data.opportunities.map((o) => o.owner))).sort()]
+  }, [data])
+
+  const filteredOpportunities = useMemo(() => {
+    if (!data) return []
+    if (selectedOwner === 'All') return data.opportunities
+    return data.opportunities.filter((o) => o.owner === selectedOwner)
+  }, [data, selectedOwner])
 
   if (isLoading) return <LoadingState />
   if (error || !data) return <ErrorState />
@@ -84,6 +98,49 @@ export default function CRMPage() {
 
         {/* Opportunities table */}
         <div style={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+
+          {/* Table toolbar: label + Owner slicer */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px 12px 8px',
+            background: 'var(--card2)',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+          }}>
+            <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)' }}>
+              Opportunities
+              {selectedOwner !== 'All' && (
+                <span style={{ marginLeft: 6, color: 'var(--accent)', fontWeight: 700 }}>· {filteredOpportunities.length} shown</span>
+              )}
+            </span>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: 9, color: 'var(--muted)', marginRight: 2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Owner</span>
+              {owners.map((owner) => {
+                const active = selectedOwner === owner
+                return (
+                  <button
+                    key={owner}
+                    onClick={() => setSelectedOwner(owner)}
+                    style={{
+                      fontSize: 10,
+                      padding: '3px 9px',
+                      borderRadius: 20,
+                      border: active ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.12)',
+                      background: active ? 'var(--accent)' : 'transparent',
+                      color: active ? '#fff' : 'var(--muted)',
+                      cursor: 'pointer',
+                      fontWeight: active ? 600 : 400,
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {owner}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
               <tr>
@@ -100,18 +157,26 @@ export default function CRMPage() {
               </tr>
             </thead>
             <tbody>
-              {data.opportunities.map((opp) => (
-                <tr key={opp.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                  <td style={tdStyle}>{opp.name}</td>
-                  <td style={tdStyle}>{opp.account}</td>
-                  <td style={tdStyle}><StagePill stage={opp.stage} /></td>
-                  <td style={{ ...tdStyle, fontFamily: 'IBM Plex Mono, monospace' }}>
-                    ${(opp.value / 1000).toFixed(0)}K
+              {filteredOpportunities.length > 0 ? (
+                filteredOpportunities.map((opp) => (
+                  <tr key={opp.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <td style={tdStyle}>{opp.name}</td>
+                    <td style={tdStyle}>{opp.account}</td>
+                    <td style={tdStyle}><StagePill stage={opp.stage} /></td>
+                    <td style={{ ...tdStyle, fontFamily: 'IBM Plex Mono, monospace' }}>
+                      ${(opp.value / 1000).toFixed(0)}K
+                    </td>
+                    <td style={tdStyle}>{opp.closeDate}</td>
+                    <td style={tdStyle}>{opp.owner}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} style={{ ...tdStyle, textAlign: 'center', color: 'var(--muted)', padding: '20px 12px' }}>
+                    No opportunities for {selectedOwner}
                   </td>
-                  <td style={tdStyle}>{opp.closeDate}</td>
-                  <td style={tdStyle}>{opp.owner}</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

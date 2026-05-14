@@ -70,6 +70,7 @@ export type ModuleId = 'crm' | 'finance' | 'ops'
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  queriesRun?: string[]
 }
 
 export interface AgentRequest {
@@ -81,4 +82,5 @@ export interface AgentRequest {
 
 export interface AgentResponse {
   reply: string
+  queries_run?: string[]
 }

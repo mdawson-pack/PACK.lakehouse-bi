@@ -28,3 +28,21 @@ def get_connection() -> pyodbc.Connection:
         f"Encrypt=yes;TrustServerCertificate=no;"
     )
     return pyodbc.connect(conn_str, attrs_before={_SQL_COPT_SS_ACCESS_TOKEN: token_struct})
+
+
+def safe_run_sql(query: str) -> list[dict]:
+    """Execute a read-only SELECT query and return rows as a list of dicts.
+
+    Raises ValueError for any non-SELECT statement before touching the database.
+    All other exceptions (connection failures, SQL errors) propagate to the caller.
+    """
+    if not query.strip().upper().startswith("SELECT"):
+        raise ValueError("Only SELECT statements are permitted.")
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(query)
+        cols = [d[0] for d in cursor.description]
+        return [dict(zip(cols, row)) for row in cursor.fetchall()]
+    finally:
+        conn.close()

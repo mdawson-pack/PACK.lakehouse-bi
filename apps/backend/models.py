@@ -75,3 +75,4 @@ class AgentRequest(BaseModel):
 
 class AgentResponse(BaseModel):
     reply: str
+    queries_run: list[str] = []

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { KPICard } from '@/components/ui/KPICard'
@@ -12,23 +12,36 @@ import type { KPI, PipelineStage, RepWinRate, Opportunity } from '@/types'
 
 const STAGE_COLORS: Record<string, string> = {
   Prospecting:   '#4f7af8',
-  Qualification: '#5e87f5',
+  Qualification: '#a78bfa',
   Proposal:      '#38c9a0',
   Negotiation:   '#f5a623',
   'Closed Won':  '#38c9a0',
   'Closed Lost': '#ef4444',
+  Unknown:       '#6b7280',
 }
 
 function deriveVisuals(opps: Opportunity[]) {
-  const active   = opps.filter((o) => !o.stage.toLowerCase().includes('closed'))
-  const won      = opps.filter((o) => o.stage.toLowerCase().includes('won'))
-  const closed   = opps.filter((o) => o.stage.toLowerCase().includes('closed'))
+  const isWon = (o: Opportunity) => {
+    const status = (o.status ?? '').toLowerCase()
+    if (status) return status.includes('won')
+    return o.stage.toLowerCase().includes('won')
+  }
+  const isClosed = (o: Opportunity) => {
+    const status = (o.status ?? '').toLowerCase()
+    if (status) return status.includes('closed') || status.includes('won') || status.includes('lost') || status.includes('dead')
+    const stage = o.stage.toLowerCase()
+    return stage.includes('closed') || stage.includes('won') || stage.includes('lost') || stage.includes('dead')
+  }
 
-  // KPIs
-  const pipelineVal = active.reduce((s, o) => s + o.value, 0)
+  const active   = opps.filter((o) => !isClosed(o))
+  const won      = opps.filter((o) => isWon(o))
+  const closed   = opps.filter((o) => isClosed(o))
+
+  // KPIs — all aggregate over the full filtered set so cards match the visible table rows
+  const pipelineVal = opps.reduce((s, o) => s + o.value, 0)
   const wonVal      = won.reduce((s, o) => s + o.value, 0)
   const winRate     = closed.length ? Math.round(won.length / closed.length * 100) : 0
-  const avgDeal     = active.length ? Math.round(pipelineVal / active.length) : 0
+  const avgDeal     = opps.length ? Math.round(pipelineVal / opps.length) : 0
 
   const kpis: KPI[] = [
     { label: 'Pipeline Value', value: `$${(pipelineVal / 1_000_000).toFixed(1)}M`, delta: '', trend: 'flat' },
@@ -72,34 +85,123 @@ export default function CRMPage() {
   })
 
   const [selectedOwners, setSelectedOwners] = useState<Set<string>>(new Set())
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set())
+  const [accountQuery, setAccountQuery] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [sortKey, setSortKey] = useState<'name' | 'account' | 'stage' | 'value' | 'closeDate' | 'status' | 'owner'>('closeDate')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const tableRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (tableRef.current) tableRef.current.scrollTop = 0
+  }, [selectedOwners, selectedStatuses, accountQuery])
+
+  const normalizedQuery = accountQuery.trim().toLowerCase()
+
+  const searchedOpps = useMemo(() => {
+    if (!data) return []
+    if (!normalizedQuery) return data.opportunities
+    return data.opportunities.filter((o) =>
+      (o.account ?? '').toLowerCase().includes(normalizedQuery) ||
+      (o.name ?? '').toLowerCase().includes(normalizedQuery)
+    )
+  }, [data, normalizedQuery])
 
   const owners = useMemo(() => {
-    if (!data) return []
-    return Array.from(new Set(data.opportunities.map((o) => o.owner))).sort()
-  }, [data])
+    return Array.from(new Set(searchedOpps.map((o) => (o.owner ?? '').trim()))).filter(Boolean).sort()
+  }, [searchedOpps])
 
-  const isFiltered = selectedOwners.size > 0
+  const statuses = useMemo(() => {
+    return Array.from(new Set(searchedOpps.map((o) => (o.status ?? '').trim()))).filter(Boolean).sort()
+  }, [searchedOpps])
+
+  const isFiltered = selectedOwners.size > 0 || selectedStatuses.size > 0 || normalizedQuery.length > 0
 
   const filteredOpps = useMemo(() => {
-    if (!data) return []
-    return isFiltered
-      ? data.opportunities.filter((o) => selectedOwners.has(o.owner))
-      : data.opportunities
-  }, [data, selectedOwners, isFiltered])
+    return searchedOpps.filter((o) => {
+      if (selectedOwners.size && !selectedOwners.has((o.owner ?? '').trim())) return false
+      if (selectedStatuses.size && !selectedStatuses.has((o.status ?? '').trim())) return false
+      return true
+    })
+  }, [searchedOpps, selectedOwners, selectedStatuses])
 
   const { kpis, pipeline, repWinRates } = useMemo(() => {
     if (!data) return { kpis: [], pipeline: [], repWinRates: [] }
-    return isFiltered
-      ? deriveVisuals(filteredOpps)
-      : { kpis: data.kpis, pipeline: data.pipeline, repWinRates: data.repWinRates }
-  }, [data, isFiltered, filteredOpps])
+    return deriveVisuals(filteredOpps)
+  }, [data, filteredOpps])
+
+  const filterSummary = useMemo(() => {
+    const parts: string[] = []
+    if (normalizedQuery) parts.push(`"${accountQuery.trim()}"`)
+    if (selectedStatuses.size) parts.push(Array.from(selectedStatuses).join(', '))
+    if (selectedOwners.size) parts.push(Array.from(selectedOwners).join(', '))
+    return parts.join(' · ')
+  }, [normalizedQuery, accountQuery, selectedOwners, selectedStatuses])
+
+  const sortedOpps = useMemo(() => {
+    const items = [...filteredOpps]
+    const factor = sortDir === 'asc' ? 1 : -1
+
+    items.sort((a, b) => {
+      if (sortKey === 'value') return (a.value - b.value) * factor
+      if (sortKey === 'closeDate') return a.closeDate.localeCompare(b.closeDate) * factor
+      return String(a[sortKey] ?? '').localeCompare(String(b[sortKey] ?? ''), undefined, { sensitivity: 'base' }) * factor
+    })
+
+    return items
+  }, [filteredOpps, sortKey, sortDir])
+
+  function exportToCsv() {
+    const headers = ['Opportunity', 'Account', 'Stage', 'Value ($)', 'Close Date', 'Status', 'Owner']
+    const escape = (v: string | number) => {
+      const s = String(v)
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const rows = sortedOpps.map((o) => [
+      escape(o.name),
+      escape(o.account),
+      escape(o.stage),
+      o.value,
+      escape(o.closeDate),
+      escape(o.status ?? ''),
+      escape(o.owner),
+    ].join(','))
+    const csv = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `opportunities${filterSummary ? '-filtered' : ''}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   function toggleOwner(owner: string) {
+    const key = owner.trim()
     setSelectedOwners((prev) => {
       const next = new Set(prev)
-      next.has(owner) ? next.delete(owner) : next.add(owner)
+      next.has(key) ? next.delete(key) : next.add(key)
       return next
     })
+  }
+
+  function toggleStatus(status: string) {
+    const key = status.trim()
+    setSelectedStatuses((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  function toggleSort(key: 'name' | 'account' | 'stage' | 'value' | 'closeDate' | 'status' | 'owner') {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortKey(key)
+    setSortDir('asc')
   }
 
   if (isLoading) return <LoadingState />
@@ -110,57 +212,148 @@ export default function CRMPage() {
       {/* Main content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        {/* ── Page slicer ── */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          background: 'var(--card)', border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 8, padding: '10px 14px',
-        }}>
-          <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-            Owner
-          </span>
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-            {owners.map((owner) => {
-              const active = selectedOwners.has(owner)
-              return (
-                <button
-                  key={owner}
-                  onClick={() => toggleOwner(owner)}
-                  style={{
-                    fontSize: 10, padding: '3px 10px', borderRadius: 20,
-                    border: active ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.12)',
-                    background: active ? 'var(--accent)' : 'transparent',
-                    color: active ? '#fff' : 'var(--muted)',
-                    cursor: 'pointer', fontWeight: active ? 600 : 400,
-                    whiteSpace: 'nowrap', transition: 'all 0.15s ease',
-                  }}
-                >
-                  {owner}
-                </button>
-              )
-            })}
-          </div>
-          {isFiltered && (
-            <>
-              <span style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                · {filteredOpps.length} {filteredOpps.length === 1 ? 'opportunity' : 'opportunities'}
-              </span>
+        {/* ── Filter drawer ── */}
+        {(() => {
+          const activeCount =
+            (normalizedQuery ? 1 : 0) +
+            (selectedStatuses.size > 0 ? 1 : 0) +
+            (selectedOwners.size > 0 ? 1 : 0)
+          return (
+            <div style={{ position: 'relative', zIndex: 20 }}>
+              {/* Trigger bar */}
               <button
-                onClick={() => setSelectedOwners(new Set())}
+                onClick={() => setFiltersOpen((o) => !o)}
                 style={{
-                  marginLeft: 'auto', fontSize: 10, color: 'var(--muted)',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  textDecoration: 'underline', whiteSpace: 'nowrap',
-                  transition: 'color 0.15s ease',
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '10px 14px',
+                  background: 'var(--card)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: filtersOpen ? '8px 8px 0 0' : 8,
+                  cursor: 'pointer', color: 'var(--text)',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
               >
-                Clear
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                  Filters
+                </span>
+                {activeCount > 0 && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+                    background: 'var(--accent)', color: '#fff',
+                  }}>
+                    {activeCount} active
+                  </span>
+                )}
+                {isFiltered && (
+                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>
+                    · {filteredOpps.length} {filteredOpps.length === 1 ? 'record' : 'records'}
+                  </span>
+                )}
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--muted)' }}>
+                  {filtersOpen ? '▲' : '▼'}
+                </span>
               </button>
-            </>
-          )}
-        </div>
+
+              {/* Floating panel — overlays content below */}
+              {filtersOpen && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0,
+                  background: 'var(--card)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderTop: '1px solid rgba(255,255,255,0.04)',
+                  borderRadius: '0 0 8px 8px',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+                  padding: '14px 14px 12px',
+                  display: 'flex', flexDirection: 'column', gap: 12,
+                }}>
+
+                  {/* Customer search */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', width: 56, flexShrink: 0 }}>
+                      Customer
+                    </span>
+                    <input
+                      type="text"
+                      value={accountQuery}
+                      onChange={(e) => setAccountQuery(e.currentTarget.value)}
+                      placeholder="Search account or opportunity name"
+                      style={{
+                        flex: '0 1 320px', fontSize: 11, color: 'var(--text)',
+                        background: 'var(--panel)', border: '1px solid rgba(255,255,255,0.12)',
+                        borderRadius: 6, padding: '6px 10px', outline: 'none',
+                      }}
+                    />
+                  </div>
+
+                  {/* Status pills */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', width: 56, flexShrink: 0, paddingTop: 4 }}>
+                      Status
+                    </span>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {statuses.map((status) => {
+                        const sel = selectedStatuses.has(status)
+                        return (
+                          <button key={status} onClick={() => toggleStatus(status)} style={{
+                            fontSize: 10, padding: '3px 10px', borderRadius: 20,
+                            border: sel ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.12)',
+                            background: sel ? 'var(--accent)' : 'transparent',
+                            color: sel ? '#fff' : 'var(--muted)',
+                            cursor: 'pointer', fontWeight: sel ? 600 : 400,
+                            whiteSpace: 'nowrap', transition: 'all 0.15s ease',
+                          }}>
+                            {status}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Owner pills */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', width: 56, flexShrink: 0, paddingTop: 4 }}>
+                      Owner
+                    </span>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {owners.map((owner) => {
+                        const sel = selectedOwners.has(owner)
+                        return (
+                          <button key={owner} onClick={() => toggleOwner(owner)} style={{
+                            fontSize: 10, padding: '3px 10px', borderRadius: 20,
+                            border: sel ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.12)',
+                            background: sel ? 'var(--accent)' : 'transparent',
+                            color: sel ? '#fff' : 'var(--muted)',
+                            cursor: 'pointer', fontWeight: sel ? 600 : 400,
+                            whiteSpace: 'nowrap', transition: 'all 0.15s ease',
+                          }}>
+                            {owner}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  {isFiltered && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <button
+                        onClick={() => { setAccountQuery(''); setSelectedOwners(new Set()); setSelectedStatuses(new Set()) }}
+                        style={{
+                          fontSize: 10, color: 'var(--muted)', background: 'none', border: 'none',
+                          cursor: 'pointer', textDecoration: 'underline', whiteSpace: 'nowrap',
+                          transition: 'color 0.15s ease',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
+                      >
+                        Clear all
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* ── KPI row ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
@@ -203,7 +396,7 @@ export default function CRMPage() {
           <div style={cardStyle}>
             <div style={chartTitleStyle}>Win rate by rep</div>
             <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 12 }}>
-              {isFiltered ? Array.from(selectedOwners).join(', ') : 'Top 5 · this quarter'}
+              {isFiltered ? filterSummary : 'Top 5 · this quarter'}
             </div>
             {repWinRates.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -216,7 +409,7 @@ export default function CRMPage() {
                       <div style={{
                         height: '100%', borderRadius: 3,
                         width: `${rep.rate}%`,
-                        background: rep.rate >= 60 ? 'var(--accent2)' : rep.rate >= 40 ? 'var(--accent)' : 'var(--accent3)',
+                        background: rep.rate >= 60 ? '#38c9a0' : rep.rate >= 40 ? '#f5a623' : '#e05c5c',
                         opacity: 0.8, transition: 'width 0.4s ease',
                       }} />
                     </div>
@@ -234,24 +427,89 @@ export default function CRMPage() {
 
         {/* ── Opportunities table ── */}
         <div style={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px 14px 8px',
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)' }}>
+              Opportunities
+              <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 400, color: 'var(--muted)' }}>
+                {sortedOpps.length} {sortedOpps.length === 1 ? 'record' : 'records'}{isFiltered ? ' (filtered)' : ''}
+              </span>
+            </span>
+            <button
+              onClick={exportToCsv}
+              disabled={sortedOpps.length === 0}
+              style={{
+                fontSize: 10, padding: '5px 12px', borderRadius: 6,
+                border: '1px solid rgba(255,255,255,0.15)',
+                background: 'transparent',
+                color: sortedOpps.length === 0 ? 'var(--muted)' : 'var(--text)',
+                cursor: sortedOpps.length === 0 ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: 5,
+                opacity: sortedOpps.length === 0 ? 0.4 : 1,
+                transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={(e) => { if (sortedOpps.length > 0) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              title="Export visible rows to CSV"
+            >
+              ↓ Export CSV
+            </button>
+          </div>
+          <div ref={tableRef} style={{ maxHeight: 400, overflowY: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
               <tr>
-                {['Opportunity', 'Account', 'Stage', 'Value', 'Close date', 'Owner'].map((h) => (
-                  <th key={h} style={{
+                {[
+                  { label: 'Opportunity', key: 'name' as const },
+                  { label: 'Account', key: 'account' as const },
+                  { label: 'Stage', key: 'stage' as const },
+                  { label: 'Value', key: 'value' as const },
+                  { label: 'Close date', key: 'closeDate' as const },
+                  { label: 'Status', key: 'status' as const },
+                  { label: 'Owner', key: 'owner' as const },
+                ].map((h) => (
+                  <th key={h.key} style={{
                     fontSize: 9, fontWeight: 600, textTransform: 'uppercase',
                     letterSpacing: '0.07em', color: 'var(--muted)',
-                    background: 'var(--card2)', padding: '8px 12px', textAlign: 'left',
+                    background: 'var(--card2)', padding: '0', textAlign: 'left',
                     borderBottom: '1px solid rgba(255,255,255,0.08)',
+                    position: 'sticky', top: 0, zIndex: 1,
                   }}>
-                    {h}
+                    <button
+                      onClick={() => toggleSort(h.key)}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'inherit',
+                        cursor: 'pointer',
+                        padding: '8px 12px',
+                        fontSize: 'inherit',
+                        fontWeight: 'inherit',
+                        letterSpacing: 'inherit',
+                        textTransform: 'inherit',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                      title={`Sort by ${h.label}`}
+                    >
+                      <span>{h.label}</span>
+                      <span style={{ opacity: sortKey === h.key ? 1 : 0.35 }}>
+                        {sortKey === h.key ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
+                      </span>
+                    </button>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filteredOpps.length > 0 ? (
-                filteredOpps.map((opp) => (
+              {sortedOpps.length > 0 ? (
+                sortedOpps.map((opp) => (
                   <tr key={opp.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                     <td style={tdStyle}>{opp.name}</td>
                     <td style={tdStyle}>{opp.account}</td>
@@ -260,18 +518,20 @@ export default function CRMPage() {
                       ${(opp.value / 1000).toFixed(0)}K
                     </td>
                     <td style={tdStyle}>{opp.closeDate}</td>
+                    <td style={tdStyle}>{opp.status ?? ''}</td>
                     <td style={tdStyle}>{opp.owner}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} style={{ ...tdStyle, textAlign: 'center', color: 'var(--muted)', padding: '20px 12px' }}>
-                    No opportunities for {selectedOwner}
+                  <td colSpan={7} style={{ ...tdStyle, textAlign: 'center', color: 'var(--muted)', padding: '20px 12px' }}>
+                    No opportunities for {filterSummary || 'the current selection'}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
       </div>

@@ -1,25 +1,30 @@
 from collections import defaultdict
+from datetime import date, datetime
+from decimal import Decimal
+import hashlib
 from db import get_connection
 from models import CRMData, KPI, PipelineStage, RepWinRate, Opportunity
 
 # Tries each variant in order; first match wins (case-insensitive)
 _COL_VARIANTS: dict[str, list[str]] = {
     "id":        ["id", "opportunityid", "opportunity_id", "opp_id"],
-    "name":      ["name", "opportunityname", "opportunity_name", "opp_name", "title"],
-    "account":   ["account", "accountname", "account_name", "client", "clientname", "company"],
+    "name":      ["opportunity name", "opportunityname", "name", "opportunity_name", "opp_name", "title"],
+    "account":   ["customer name", "company name", "account", "accountname", "account_name", "client", "clientname", "company"],
     "stage":     ["stage", "stagename", "stage_name", "salestage", "pipeline_stage"],
-    "value":     ["value", "amount", "dealvalue", "deal_value", "opportunityvalue", "revenue"],
-    "closeDate": ["closedate", "close_date", "expectedclosedate", "expected_close_date"],
+    "status":    ["status"],
+    "value":     ["estimated revenue", "actual value", "price submitted", "value", "amount", "dealvalue", "deal_value", "opportunityvalue", "revenue"],
+    "closeDate": ["estimated close date", "actual close date", "closedate", "close_date", "expectedclosedate", "expected_close_date"],
     "owner":     ["owner", "ownername", "owner_name", "assignedto", "salesrep", "rep"],
 }
 
 _STAGE_COLORS: dict[str, str] = {
     "Prospecting":   "#4f7af8",
-    "Qualification": "#5e87f5",
+    "Qualification": "#a78bfa",
     "Proposal":      "#38c9a0",
     "Negotiation":   "#f5a623",
     "Closed Won":    "#38c9a0",
     "Closed Lost":   "#ef4444",
+    "Unknown":       "#6b7280",
 }
 
 
@@ -40,32 +45,113 @@ def _get(row, col_map: dict[str, str], field: str, default=None):
     return getattr(row, col, default) if col else default
 
 
+def _as_int_currency(value) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, Decimal):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return int(value)
+    try:
+        return int(float(str(value)))
+    except Exception:
+        return 0
+
+
+def _as_date_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)
+
+
+def _normalize_stage(raw_stage: str) -> str:
+    stage = (raw_stage or "").strip()
+    lower = stage.lower()
+    if not stage:
+        return "Unknown"
+    if "won" in lower:
+        return "Closed Won"
+    if "lost" in lower or "dead" in lower:
+        return "Closed Lost"
+    if lower.startswith("prospect"):
+        return "Prospecting"
+    if lower.startswith("qualif"):
+        return "Qualification"
+    if lower.startswith("propos"):
+        return "Proposal"
+    if lower.startswith("negotiat"):
+        return "Negotiation"
+    return stage
+
+
+def _stable_opportunity_id(name: str, account: str, close_date: str, owner: str) -> str:
+    payload = "|".join([name, account, close_date, owner]).encode("utf-8")
+    return hashlib.sha1(payload).hexdigest()[:16]
+
+
 def get_crm_data_from_lakehouse() -> CRMData:
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM [200_crm_opportunities]")
+        cursor.execute("SELECT * FROM [dbo].[Revenue Opportunity]")
         actual_cols = [d[0] for d in cursor.description]
         col_map = _resolve_columns(actual_cols)
         rows = cursor.fetchall()
     finally:
         conn.close()
 
-    opportunities = [
-        Opportunity(
-            id=str(_get(row, col_map, "id", "") or ""),
-            name=str(_get(row, col_map, "name", "") or ""),
-            account=str(_get(row, col_map, "account", "") or ""),
-            stage=str(_get(row, col_map, "stage", "") or ""),
-            value=int(_get(row, col_map, "value", 0) or 0),
-            closeDate=str(_get(row, col_map, "closeDate", "") or ""),
-            owner=str(_get(row, col_map, "owner", "") or ""),
-        )
-        for row in rows
-    ]
+    seen: dict[str, Opportunity] = {}
+    won_ids: set[str] = set()
+    lost_ids: set[str] = set()
+    closed_ids: set[str] = set()
+    for row in rows:
+        name = str(_get(row, col_map, "name", "") or "")
+        account = str(_get(row, col_map, "account", "") or "")
+        stage = _normalize_stage(str(_get(row, col_map, "stage", "") or ""))
+        status = str(_get(row, col_map, "status", "") or "").strip()
+        status_lower = status.lower()
+        close_date = _as_date_text(_get(row, col_map, "closeDate", ""))
+        owner = str(_get(row, col_map, "owner", "") or "")
+        value = _as_int_currency(_get(row, col_map, "value", 0))
+        source_id = _get(row, col_map, "id", None)
+        identifier = str(source_id) if source_id else _stable_opportunity_id(name, account, close_date, owner)
+
+        # Prefer status as source of truth for closed/won; fall back to stage.
+        is_won = "won" in status_lower
+        is_lost = "lost" in status_lower or "dead" in status_lower
+        is_closed = is_won or is_lost or "closed" in status_lower
+        if not status:
+            stage_lower = stage.lower()
+            is_won = "won" in stage_lower
+            is_lost = "lost" in stage_lower or "dead" in stage_lower
+            is_closed = is_won or is_lost or "closed" in stage_lower
+
+        if identifier not in seen:
+            seen[identifier] = Opportunity(
+                id=identifier,
+                name=name,
+                account=account,
+                stage=stage,
+                status=status,
+                value=value,
+                closeDate=close_date,
+                owner=owner,
+            )
+            if is_won:
+                won_ids.add(identifier)
+            if is_lost:
+                lost_ids.add(identifier)
+            if is_closed:
+                closed_ids.add(identifier)
+
+    opportunities = list(seen.values())
 
     # Pipeline breakdown — active (non-closed) stages only
-    active = [o for o in opportunities if "closed" not in o.stage.lower()]
+    active = [o for o in opportunities if o.id not in closed_ids]
     stage_counts: dict[str, int] = defaultdict(int)
     for o in active:
         stage_counts[o.stage] += 1
@@ -81,7 +167,7 @@ def get_crm_data_from_lakehouse() -> CRMData:
     ]
 
     # Rep win rates (top 5 by win %)
-    won = [o for o in opportunities if "won" in o.stage.lower()]
+    won = [o for o in opportunities if o.id in won_ids]
     owner_total: dict[str, int] = defaultdict(int)
     owner_won: dict[str, int] = defaultdict(int)
     for o in opportunities:
@@ -97,9 +183,9 @@ def get_crm_data_from_lakehouse() -> CRMData:
     )[:5]
 
     # KPIs derived from the full dataset
-    pipeline_value = sum(o.value for o in opportunities if "closed lost" not in o.stage.lower())
+    pipeline_value = sum(o.value for o in active)
     won_value = sum(o.value for o in won)
-    closed_count = sum(1 for o in opportunities if "closed" in o.stage.lower())
+    closed_count = len(closed_ids)
     win_rate = round(len(won) / closed_count * 100) if closed_count else 0
     avg_deal = round(pipeline_value / len(active)) if active else 0
 

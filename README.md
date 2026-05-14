@@ -38,6 +38,7 @@ lakehouse-bi/
 - Node.js 18+
 - Python 3.12+
 - Anthropic API key
+- ODBC Driver 18 for SQL Server (required for lakehouse mode)
 
 ### Setup
 
@@ -56,6 +57,14 @@ cp apps/backend/.env.example apps/backend/.env
 
 # Edit both .env files with your keys
 
+# Backend lakehouse mode (CRM)
+# DATA_MODE=lakehouse
+# FABRIC_SQL_ENDPOINT=<your-server>.datawarehouse.fabric.microsoft.com
+# FABRIC_DATABASE=<your_database_name>
+# FABRIC_CLIENT_ID=<service_principal_client_id>
+# FABRIC_CLIENT_SECRET=<service_principal_client_secret>
+# FABRIC_TENANT_ID=<tenant_id>
+
 # 4. Run both servers
 # Terminal 1:
 cd apps/frontend && npm run dev
@@ -67,3 +76,32 @@ cd apps/backend && uvicorn main:app --reload --port 8000
 Frontend runs at: http://localhost:3000
 Backend runs at:  http://localhost:8000
 API docs at:      http://localhost:8000/docs
+
+## CRM Lakehouse Source
+
+When `DATA_MODE=lakehouse`, the CRM endpoint queries:
+
+- Table: `[dbo].[Revenue Opportunity]`
+- Endpoint: `GET /api/crm`
+
+The backend maps the source fields to the CRM contract used by the frontend:
+
+- `Opportunity Name` -> `name`
+- `Customer Name` (fallback `Company Name`) -> `account`
+- `Stage` (fallback `Status`) -> `stage`
+- `Estimated Revenue` (fallback `Actual Value`, `Price Submitted`) -> `value`
+- `Estimated Close Date` (fallback `Actual Close Date`) -> `closeDate`
+- `Owner` -> `owner`
+
+If no explicit ID column exists, a stable deterministic ID is generated per opportunity.
+
+## Quick Verification
+
+After starting backend in lakehouse mode:
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/api/crm
+```
+
+If required lakehouse settings are missing, `/api/crm` returns a 503 with the missing setting names.

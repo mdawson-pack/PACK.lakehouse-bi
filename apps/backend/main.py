@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import anthropic
 
-from config import settings
+from config import settings, missing_lakehouse_settings
 from models import CRMData, FinanceData, OpsData, AgentRequest, AgentResponse
 from mock_data import get_crm_data, get_finance_data, get_ops_data
 from lakehouse import get_crm_data_from_lakehouse
@@ -23,6 +23,9 @@ app.add_middleware(
 @app.get("/api/crm", response_model=CRMData)
 async def get_crm():
     if settings.data_mode == "lakehouse":
+        missing = missing_lakehouse_settings()
+        if missing:
+            raise HTTPException(503, f"Lakehouse configuration missing: {', '.join(missing)}")
         try:
             return get_crm_data_from_lakehouse()
         except Exception as e:

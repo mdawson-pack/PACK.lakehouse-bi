@@ -24,6 +24,7 @@ class Opportunity(BaseModel):
     name: str
     account: str
     stage: str
+    status: str = ""
     value: int
     closeDate: str
     owner: str

@@ -22,13 +22,13 @@ export function Sidebar() {
     <nav style={{
       width: 200,
       background: 'var(--sidebar)',
-      borderRight: '1px solid rgba(255,255,255,0.07)',
+      borderRight: '1px solid var(--border)',
       display: 'flex',
       flexDirection: 'column',
       flexShrink: 0,
     }}>
       {/* Logo */}
-      <div style={{ padding: '18px 16px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+      <div style={{ padding: '18px 16px 14px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', letterSpacing: '0.02em' }}>
           Lakehouse BI
         </div>
@@ -62,7 +62,7 @@ export function Sidebar() {
       {/* User */}
       <div style={{
         padding: '12px 16px',
-        borderTop: '1px solid rgba(255,255,255,0.07)',
+        borderTop: '1px solid var(--border)',
         display: 'flex',
         alignItems: 'center',
         gap: 8,

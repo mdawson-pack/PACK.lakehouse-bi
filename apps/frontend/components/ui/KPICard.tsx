@@ -23,7 +23,7 @@ export function KPICard({ kpi }: { kpi: KPI }) {
   return (
     <div style={{
       background: 'var(--card)',
-      border: '1px solid rgba(255,255,255,0.08)',
+      border: '1px solid var(--border)',
       borderRadius: 8,
       padding: '12px 14px',
     }}>

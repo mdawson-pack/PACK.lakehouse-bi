@@ -265,7 +265,7 @@ export default function CRMPage() {
                   width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                   padding: '10px 14px',
                   background: 'var(--card)',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  border: '1px solid var(--border)',
                   borderRadius: filtersOpen ? '8px 8px 0 0' : 8,
                   cursor: 'pointer', color: 'var(--text)',
                 }}
@@ -295,7 +295,7 @@ export default function CRMPage() {
               {filtersOpen && (
                 <div style={{
                   background: 'var(--card)',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  border: '1px solid var(--border)',
                   borderTop: '1px solid rgba(255,255,255,0.04)',
                   borderRadius: '0 0 8px 8px',
                   boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
@@ -419,7 +419,7 @@ export default function CRMPage() {
 
                   {/* Footer */}
                   {isFiltered && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
                       <button
                         onClick={() => { setAccountQuery(''); setSelectedAccounts(new Set()); setSelectedOwners(new Set()); setSelectedStatuses(new Set()); setSelectedStages(new Set()) }}
                         style={{
@@ -511,11 +511,11 @@ export default function CRMPage() {
         </div>
 
         {/* ── Opportunities table ── */}
-        <div style={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '10px 14px 8px',
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
+            borderBottom: '1px solid var(--border)',
           }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)' }}>
               Opportunities
@@ -560,7 +560,7 @@ export default function CRMPage() {
                     fontSize: 9, fontWeight: 600, textTransform: 'uppercase',
                     letterSpacing: '0.07em', color: 'var(--muted)',
                     background: 'var(--card2)', padding: '0', textAlign: 'left',
-                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                    borderBottom: '1px solid var(--border)',
                     position: 'sticky', top: 0, zIndex: 1,
                   }}>
                     <button
@@ -664,7 +664,7 @@ function Skeleton({ height }: { height: number }) {
   return (
     <div style={{
       height, background: 'var(--card)',
-      border: '1px solid rgba(255,255,255,0.08)',
+      border: '1px solid var(--border)',
       borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite',
     }} />
   )
@@ -672,7 +672,7 @@ function Skeleton({ height }: { height: number }) {
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--card)',
-  border: '1px solid rgba(255,255,255,0.08)',
+  border: '1px solid var(--border)',
   borderRadius: 8, padding: 14,
 }
 

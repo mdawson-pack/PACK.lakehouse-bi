@@ -112,7 +112,7 @@ export function AgentPanel({ module }: AgentPanelProps) {
     <div style={{
       width,
       background: 'var(--panel)',
-      borderLeft: '1px solid rgba(255,255,255,0.08)',
+      borderLeft: '1px solid var(--border)',
       display: 'flex',
       flexDirection: 'column',
       flexShrink: 0,
@@ -138,7 +138,7 @@ export function AgentPanel({ module }: AgentPanelProps) {
         onMouseLeave={e => { if (!dragging) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
       />
       {/* Header */}
-      <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
           <span style={{
             width: 7, height: 7, borderRadius: '50%',
@@ -152,7 +152,7 @@ export function AgentPanel({ module }: AgentPanelProps) {
       </div>
 
       {/* Context chips */}
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', marginBottom: 7 }}>
           {config.contextLabel}
         </div>
@@ -161,7 +161,7 @@ export function AgentPanel({ module }: AgentPanelProps) {
             display: 'inline-flex', alignItems: 'center', gap: 5,
             fontSize: 10,
             background: 'var(--card)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid var(--border)',
             borderRadius: 4, padding: '3px 8px',
             color: 'var(--text)',
             marginRight: 4, marginBottom: 4,
@@ -189,7 +189,7 @@ export function AgentPanel({ module }: AgentPanelProps) {
               lineHeight: 1.55,
               color: 'var(--text)',
               background: msg.role === 'user' ? 'rgba(79,122,248,0.1)' : 'var(--card)',
-              border: msg.role === 'user' ? '1px solid rgba(79,122,248,0.2)' : '1px solid rgba(255,255,255,0.08)',
+              border: msg.role === 'user' ? '1px solid rgba(79,122,248,0.2)' : '1px solid var(--border)',
               borderRadius: 7,
               padding: '8px 10px',
               whiteSpace: 'pre-wrap',
@@ -250,7 +250,7 @@ export function AgentPanel({ module }: AgentPanelProps) {
             <div style={{
               fontSize: 11, color: 'var(--muted)',
               background: 'var(--card)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid var(--border)',
               borderRadius: 7, padding: '8px 10px',
             }}>
               Thinking…
@@ -266,7 +266,7 @@ export function AgentPanel({ module }: AgentPanelProps) {
           <button key={s} onClick={() => send(s.replace(' ↗', ''))} style={{
             fontSize: 9,
             background: 'var(--card)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid var(--border)',
             borderRadius: 4, padding: '3px 8px',
             color: 'var(--muted)', cursor: 'pointer',
             fontFamily: 'IBM Plex Sans, sans-serif',
@@ -277,7 +277,7 @@ export function AgentPanel({ module }: AgentPanelProps) {
       </div>
 
       {/* Input */}
-      <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', gap: 7 }}>
+      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', display: 'flex', gap: 7 }}>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -286,7 +286,7 @@ export function AgentPanel({ module }: AgentPanelProps) {
           style={{
             flex: 1,
             background: 'var(--card)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid var(--border)',
             borderRadius: 6, padding: '7px 10px',
             fontSize: 11, color: 'var(--text)',
             fontFamily: 'IBM Plex Sans, sans-serif',

@@ -31,7 +31,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          borderBottom: '1px solid var(--border)',
           background: 'var(--panel)',
           flexShrink: 0,
         }}>
@@ -75,7 +75,7 @@ const badgeStyle: React.CSSProperties = {
   fontFamily: 'IBM Plex Mono, monospace',
   padding: '3px 8px',
   borderRadius: 4,
-  border: '1px solid rgba(255,255,255,0.08)',
+  border: '1px solid var(--border)',
   color: 'var(--muted)',
   background: 'var(--card)',
 }

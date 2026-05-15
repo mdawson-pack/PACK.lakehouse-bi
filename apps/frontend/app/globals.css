@@ -21,6 +21,23 @@
   --accent4:       #e05c5c;
 }
 
+[data-theme="light"] {
+  --sidebar:       #eef0f6;
+  --sidebar-hover: #e2e5ef;
+  --sidebar-active:#d8dcea;
+  --main:          #f4f5fa;
+  --panel:         #ffffff;
+  --card:          #ffffff;
+  --card2:         #f0f2f8;
+  --border:        rgba(0,0,0,0.08);
+  --text:          #1a1d2e;
+  --muted:         #6b7280;
+  --accent:        #4f7af8;
+  --accent2:       #2aaa87;
+  --accent3:       #d4871a;
+  --accent4:       #d94444;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -39,8 +56,8 @@ html, body {
 /* Scrollbar styling */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.25); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.4); }
 
 /* Agent panel markdown prose */
 .agent-prose p { line-height: 1.55; margin-bottom: 6px; }

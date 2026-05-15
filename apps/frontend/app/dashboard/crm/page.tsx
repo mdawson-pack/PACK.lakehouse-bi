@@ -18,13 +18,10 @@ function fmtCurrency(value: number): string {
 }
 
 const STAGE_COLORS: Record<string, string> = {
-  Prospecting:   '#4f7af8',
-  Qualification: '#a78bfa',
-  Proposal:      '#38c9a0',
-  Negotiation:   '#f5a623',
-  'Closed Won':  '#38c9a0',
-  'Closed Lost': '#ef4444',
-  Unknown:       '#6b7280',
+  Qualify:  '#a78bfa',
+  Propose:  '#4f7af8',
+  Close:    '#38c9a0',
+  Unknown:  '#6b7280',
 }
 
 function deriveVisuals(opps: Opportunity[]) {
@@ -89,6 +86,7 @@ export default function CRMPage() {
 
   const [selectedOwners, setSelectedOwners] = useState<Set<string>>(new Set())
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set())
+  const [selectedStages, setSelectedStages] = useState<Set<string>>(new Set())
   const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set())
   const [accountQuery, setAccountQuery] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -99,7 +97,7 @@ export default function CRMPage() {
 
   useEffect(() => {
     if (tableRef.current) tableRef.current.scrollTop = 0
-  }, [selectedOwners, selectedStatuses, selectedAccounts, accountQuery])
+  }, [selectedOwners, selectedStatuses, selectedStages, selectedAccounts, accountQuery])
 
   const normalizedQuery = accountQuery.trim().toLowerCase()
 
@@ -132,7 +130,7 @@ export default function CRMPage() {
     return Array.from(new Set((data?.opportunities ?? []).map((o) => (o.company ?? '').trim()))).filter(Boolean).sort()
   }, [data])
 
-  const isFiltered = selectedOwners.size > 0 || selectedStatuses.size > 0 || selectedAccounts.size > 0 || normalizedQuery.length > 0
+  const isFiltered = selectedOwners.size > 0 || selectedStatuses.size > 0 || selectedStages.size > 0 || selectedAccounts.size > 0 || normalizedQuery.length > 0
 
   const filteredOpps = useMemo(() => {
     const lowerStatuses = new Set(Array.from(selectedStatuses).map((s) => s.toLowerCase()))
@@ -140,9 +138,10 @@ export default function CRMPage() {
       if (selectedAccounts.size && !selectedAccounts.has((o.company ?? '').trim())) return false
       if (selectedOwners.size && !selectedOwners.has((o.owner ?? '').trim())) return false
       if (selectedStatuses.size && !lowerStatuses.has((o.status ?? '').trim().toLowerCase())) return false
+      if (selectedStages.size && !selectedStages.has(o.stage)) return false
       return true
     })
-  }, [searchedOpps, selectedAccounts, selectedOwners, selectedStatuses])
+  }, [searchedOpps, selectedAccounts, selectedOwners, selectedStatuses, selectedStages])
 
   const { kpis, pipeline, repWinRates } = useMemo(() => {
     if (!data) return { kpis: [], pipeline: [], repWinRates: [] }
@@ -153,10 +152,11 @@ export default function CRMPage() {
     const parts: string[] = []
     if (normalizedQuery) parts.push(`"${accountQuery.trim()}"`)
     if (selectedAccounts.size) parts.push(Array.from(selectedAccounts).join(', '))
+    if (selectedStages.size) parts.push(Array.from(selectedStages).join(', '))
     if (selectedStatuses.size) parts.push(Array.from(selectedStatuses).join(', '))
     if (selectedOwners.size) parts.push(Array.from(selectedOwners).join(', '))
     return parts.join(' · ')
-  }, [normalizedQuery, accountQuery, selectedAccounts, selectedOwners, selectedStatuses])
+  }, [normalizedQuery, accountQuery, selectedAccounts, selectedOwners, selectedStatuses, selectedStages])
 
   const sortedOpps = useMemo(() => {
     const items = [...filteredOpps]
@@ -223,6 +223,14 @@ export default function CRMPage() {
     })
   }
 
+  function toggleStage(stage: string) {
+    setSelectedStages((prev) => {
+      const next = new Set(prev)
+      next.has(stage) ? next.delete(stage) : next.add(stage)
+      return next
+    })
+  }
+
   function toggleSort(key: 'name' | 'account' | 'stage' | 'value' | 'closeDate' | 'status' | 'owner') {
     if (sortKey === key) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -245,6 +253,7 @@ export default function CRMPage() {
           const activeCount =
             (normalizedQuery ? 1 : 0) +
             (selectedAccounts.size > 0 ? 1 : 0) +
+            (selectedStages.size > 0 ? 1 : 0) +
             (selectedStatuses.size > 0 ? 1 : 0) +
             (selectedOwners.size > 0 ? 1 : 0)
           return (
@@ -336,6 +345,30 @@ export default function CRMPage() {
                     />
                   </div>
 
+                  {/* Stage pills */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', width: 56, flexShrink: 0, paddingTop: 4 }}>
+                      Stage
+                    </span>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {(['Qualify', 'Propose', 'Close'] as const).map((stage) => {
+                        const sel = selectedStages.has(stage)
+                        return (
+                          <button key={stage} onClick={() => toggleStage(stage)} style={{
+                            fontSize: 10, padding: '3px 10px', borderRadius: 20,
+                            border: sel ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.12)',
+                            background: sel ? 'var(--accent)' : 'transparent',
+                            color: sel ? '#fff' : 'var(--muted)',
+                            cursor: 'pointer', fontWeight: sel ? 600 : 400,
+                            whiteSpace: 'nowrap', transition: 'all 0.15s ease',
+                          }}>
+                            {stage}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
                   {/* Status pills */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                     <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', width: 56, flexShrink: 0, paddingTop: 4 }}>
@@ -388,7 +421,7 @@ export default function CRMPage() {
                   {isFiltered && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                       <button
-                        onClick={() => { setAccountQuery(''); setSelectedAccounts(new Set()); setSelectedOwners(new Set()); setSelectedStatuses(new Set()) }}
+                        onClick={() => { setAccountQuery(''); setSelectedAccounts(new Set()); setSelectedOwners(new Set()); setSelectedStatuses(new Set()); setSelectedStages(new Set()) }}
                         style={{
                           fontSize: 10, color: 'var(--muted)', background: 'none', border: 'none',
                           cursor: 'pointer', textDecoration: 'underline', whiteSpace: 'nowrap',
@@ -495,7 +528,7 @@ export default function CRMPage() {
               disabled={sortedOpps.length === 0}
               style={{
                 fontSize: 10, padding: '5px 12px', borderRadius: 6,
-                border: '1px solid rgba(255,255,255,0.15)',
+                border: '1px solid var(--border)',
                 background: 'transparent',
                 color: sortedOpps.length === 0 ? 'var(--muted)' : 'var(--text)',
                 cursor: sortedOpps.length === 0 ? 'not-allowed' : 'pointer',
@@ -503,7 +536,7 @@ export default function CRMPage() {
                 opacity: sortedOpps.length === 0 ? 0.4 : 1,
                 transition: 'background 0.15s ease',
               }}
-              onMouseEnter={(e) => { if (sortedOpps.length > 0) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+              onMouseEnter={(e) => { if (sortedOpps.length > 0) e.currentTarget.style.background = 'var(--card2)' }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
               title="Export visible rows to CSV"
             >

@@ -105,7 +105,7 @@ function NavItem({ href, active, children }: { href: string; active: boolean; ch
       padding: '7px 16px',
       fontSize: 12,
       color: active ? 'var(--text)' : 'var(--muted)',
-      background: active ? '#1e2235' : 'transparent',
+      background: active ? 'var(--sidebar-active)' : 'transparent',
       borderLeft: active ? '2px solid var(--accent)' : '2px solid transparent',
       textDecoration: 'none',
       transition: 'all 0.15s',

@@ -24,7 +24,7 @@ export interface Opportunity {
   name: string
   account: string
   company?: string
-  stage: 'Prospecting' | 'Qualification' | 'Proposal' | 'Negotiation' | 'Closed Won' | 'Closed Lost'
+  stage: 'Qualify' | 'Propose' | 'Close'
   status?: string
   value: number
   closeDate: string

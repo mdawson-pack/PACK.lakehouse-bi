@@ -84,18 +84,16 @@ def _normalize_stage(raw_stage: str) -> str:
     lower = stage.lower()
     if not stage:
         return "Unknown"
-    if "won" in lower:
-        return "Closed Won"
-    if "lost" in lower or "dead" in lower:
-        return "Closed Lost"
-    if lower.startswith("prospect"):
-        return "Prospecting"
     if lower.startswith("qualif"):
-        return "Qualification"
+        return "Qualify"
     if lower.startswith("propos"):
-        return "Proposal"
+        return "Propose"
+    if lower.startswith("clos") or "won" in lower or "lost" in lower or "dead" in lower:
+        return "Close"
+    if lower.startswith("prospect"):
+        return "Qualify"
     if lower.startswith("negotiat"):
-        return "Negotiation"
+        return "Close"
     return stage
 
 

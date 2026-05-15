@@ -2,9 +2,15 @@
 
 import { Sidebar } from '@/components/layout/Sidebar'
 import { usePathname } from 'next/navigation'
+import { useState, useEffect } from 'react'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
 
   const moduleConfig: Record<string, { title: string; subtitle: string }> = {
     '/dashboard/crm':     { title: 'CRM Sales Opportunities', subtitle: 'Fabric Lakehouse · Dynamics 365' },
@@ -36,7 +42,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <span style={badgeStyle}>FY 2025 · Q2</span>
             <span style={badgeStyle}>All Regions</span>
-            <button style={btnStyle}>Export</button>
+            <button
+              onClick={() => setTheme((t) => t === 'dark' ? 'light' : 'dark')}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              style={{
+                fontSize: 14,
+                background: 'none',
+                border: '1px solid rgba(128,128,128,0.2)',
+                borderRadius: 6,
+                padding: '3px 7px',
+                cursor: 'pointer',
+                color: 'var(--muted)',
+                lineHeight: 1,
+              }}
+            >
+              {theme === 'dark' ? '☀' : '🌙'}
+            </button>
           </div>
         </div>
 
@@ -59,14 +80,3 @@ const badgeStyle: React.CSSProperties = {
   background: 'var(--card)',
 }
 
-const btnStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 500,
-  padding: '5px 12px',
-  borderRadius: 5,
-  background: 'var(--accent)',
-  color: '#fff',
-  cursor: 'pointer',
-  border: 'none',
-  fontFamily: 'IBM Plex Sans, sans-serif',
-}

@@ -23,6 +23,7 @@ export interface Opportunity {
   id: string
   name: string
   account: string
+  company?: string
   stage: 'Prospecting' | 'Qualification' | 'Proposal' | 'Negotiation' | 'Closed Won' | 'Closed Lost'
   status?: string
   value: number

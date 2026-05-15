@@ -10,6 +10,13 @@ import type { KPI, PipelineStage, RepWinRate, Opportunity } from '@/types'
 
 // ── Derive all visuals from a set of opportunities ────────────────────────────
 
+function fmtCurrency(value: number): string {
+  if (Math.abs(value) >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`
+  if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`
+  if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(1)}K`
+  return `$${value}`
+}
+
 const STAGE_COLORS: Record<string, string> = {
   Prospecting:   '#4f7af8',
   Qualification: '#a78bfa',
@@ -21,11 +28,7 @@ const STAGE_COLORS: Record<string, string> = {
 }
 
 function deriveVisuals(opps: Opportunity[]) {
-  const isWon = (o: Opportunity) => {
-    const status = (o.status ?? '').toLowerCase()
-    if (status) return status.includes('won')
-    return o.stage.toLowerCase().includes('won')
-  }
+  const isWon = (o: Opportunity) => (o.status ?? '').trim().toLowerCase() === 'won'
   const isClosed = (o: Opportunity) => {
     const status = (o.status ?? '').toLowerCase()
     if (status) return status.includes('closed') || status.includes('won') || status.includes('lost') || status.includes('dead')
@@ -44,10 +47,10 @@ function deriveVisuals(opps: Opportunity[]) {
   const avgDeal     = opps.length ? Math.round(pipelineVal / opps.length) : 0
 
   const kpis: KPI[] = [
-    { label: 'Pipeline Value', value: `$${(pipelineVal / 1_000_000).toFixed(1)}M`, delta: '', trend: 'flat' },
-    { label: 'Won Revenue',    value: `$${(wonVal / 1_000_000).toFixed(1)}M`,      delta: '', trend: 'flat' },
-    { label: 'Win Rate',       value: `${winRate}%`,                                delta: '', trend: 'flat' },
-    { label: 'Avg Deal Size',  value: `$${(avgDeal / 1_000).toFixed(0)}K`,          delta: '', trend: 'flat' },
+    { label: 'Pipeline Value', value: fmtCurrency(pipelineVal), delta: '', trend: 'flat' },
+    { label: 'Won Revenue',    value: fmtCurrency(wonVal),     delta: '', trend: 'flat' },
+    { label: 'Win Rate',       value: `${winRate}%`,           delta: '', trend: 'flat' },
+    { label: 'Avg Deal Size',  value: fmtCurrency(avgDeal),    delta: '', trend: 'flat' },
   ]
 
   // Pipeline funnel
@@ -86,6 +89,7 @@ export default function CRMPage() {
 
   const [selectedOwners, setSelectedOwners] = useState<Set<string>>(new Set())
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set())
+  const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set())
   const [accountQuery, setAccountQuery] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [sortKey, setSortKey] = useState<'name' | 'account' | 'stage' | 'value' | 'closeDate' | 'status' | 'owner'>('closeDate')
@@ -95,7 +99,7 @@ export default function CRMPage() {
 
   useEffect(() => {
     if (tableRef.current) tableRef.current.scrollTop = 0
-  }, [selectedOwners, selectedStatuses, accountQuery])
+  }, [selectedOwners, selectedStatuses, selectedAccounts, accountQuery])
 
   const normalizedQuery = accountQuery.trim().toLowerCase()
 
@@ -113,18 +117,32 @@ export default function CRMPage() {
   }, [searchedOpps])
 
   const statuses = useMemo(() => {
-    return Array.from(new Set(searchedOpps.map((o) => (o.status ?? '').trim()))).filter(Boolean).sort()
+    // Deduplicate case-insensitively; preserve the first-seen display casing.
+    const seen = new Map<string, string>() // lowercase key → display value
+    for (const o of searchedOpps) {
+      const raw = (o.status ?? '').trim()
+      if (!raw) continue
+      const lower = raw.toLowerCase()
+      if (!seen.has(lower)) seen.set(lower, raw)
+    }
+    return Array.from(seen.values()).sort()
   }, [searchedOpps])
 
-  const isFiltered = selectedOwners.size > 0 || selectedStatuses.size > 0 || normalizedQuery.length > 0
+  const accounts = useMemo(() => {
+    return Array.from(new Set((data?.opportunities ?? []).map((o) => (o.company ?? '').trim()))).filter(Boolean).sort()
+  }, [data])
+
+  const isFiltered = selectedOwners.size > 0 || selectedStatuses.size > 0 || selectedAccounts.size > 0 || normalizedQuery.length > 0
 
   const filteredOpps = useMemo(() => {
+    const lowerStatuses = new Set(Array.from(selectedStatuses).map((s) => s.toLowerCase()))
     return searchedOpps.filter((o) => {
+      if (selectedAccounts.size && !selectedAccounts.has((o.company ?? '').trim())) return false
       if (selectedOwners.size && !selectedOwners.has((o.owner ?? '').trim())) return false
-      if (selectedStatuses.size && !selectedStatuses.has((o.status ?? '').trim())) return false
+      if (selectedStatuses.size && !lowerStatuses.has((o.status ?? '').trim().toLowerCase())) return false
       return true
     })
-  }, [searchedOpps, selectedOwners, selectedStatuses])
+  }, [searchedOpps, selectedAccounts, selectedOwners, selectedStatuses])
 
   const { kpis, pipeline, repWinRates } = useMemo(() => {
     if (!data) return { kpis: [], pipeline: [], repWinRates: [] }
@@ -134,10 +152,11 @@ export default function CRMPage() {
   const filterSummary = useMemo(() => {
     const parts: string[] = []
     if (normalizedQuery) parts.push(`"${accountQuery.trim()}"`)
+    if (selectedAccounts.size) parts.push(Array.from(selectedAccounts).join(', '))
     if (selectedStatuses.size) parts.push(Array.from(selectedStatuses).join(', '))
     if (selectedOwners.size) parts.push(Array.from(selectedOwners).join(', '))
     return parts.join(' · ')
-  }, [normalizedQuery, accountQuery, selectedOwners, selectedStatuses])
+  }, [normalizedQuery, accountQuery, selectedAccounts, selectedOwners, selectedStatuses])
 
   const sortedOpps = useMemo(() => {
     const items = [...filteredOpps]
@@ -195,6 +214,15 @@ export default function CRMPage() {
     })
   }
 
+  function toggleAccount(account: string) {
+    const key = account.trim()
+    setSelectedAccounts((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
   function toggleSort(key: 'name' | 'account' | 'stage' | 'value' | 'closeDate' | 'status' | 'owner') {
     if (sortKey === key) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -216,10 +244,11 @@ export default function CRMPage() {
         {(() => {
           const activeCount =
             (normalizedQuery ? 1 : 0) +
+            (selectedAccounts.size > 0 ? 1 : 0) +
             (selectedStatuses.size > 0 ? 1 : 0) +
             (selectedOwners.size > 0 ? 1 : 0)
           return (
-            <div style={{ position: 'relative', zIndex: 20 }}>
+            <div>
               {/* Trigger bar */}
               <button
                 onClick={() => setFiltersOpen((o) => !o)}
@@ -253,10 +282,9 @@ export default function CRMPage() {
                 </span>
               </button>
 
-              {/* Floating panel — overlays content below */}
+              {/* Filter panel */}
               {filtersOpen && (
                 <div style={{
-                  position: 'absolute', top: '100%', left: 0, right: 0,
                   background: 'var(--card)',
                   border: '1px solid rgba(255,255,255,0.08)',
                   borderTop: '1px solid rgba(255,255,255,0.04)',
@@ -265,6 +293,30 @@ export default function CRMPage() {
                   padding: '14px 14px 12px',
                   display: 'flex', flexDirection: 'column', gap: 12,
                 }}>
+
+                  {/* Company pills */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', width: 56, flexShrink: 0, paddingTop: 4 }}>
+                      Company
+                    </span>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {accounts.map((account) => {
+                        const sel = selectedAccounts.has(account)
+                        return (
+                          <button key={account} onClick={() => toggleAccount(account)} style={{
+                            fontSize: 10, padding: '3px 10px', borderRadius: 20,
+                            border: sel ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.12)',
+                            background: sel ? 'var(--accent)' : 'transparent',
+                            color: sel ? '#fff' : 'var(--muted)',
+                            cursor: 'pointer', fontWeight: sel ? 600 : 400,
+                            whiteSpace: 'nowrap', transition: 'all 0.15s ease',
+                          }}>
+                            {account}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
 
                   {/* Customer search */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -336,7 +388,7 @@ export default function CRMPage() {
                   {isFiltered && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                       <button
-                        onClick={() => { setAccountQuery(''); setSelectedOwners(new Set()); setSelectedStatuses(new Set()) }}
+                        onClick={() => { setAccountQuery(''); setSelectedAccounts(new Set()); setSelectedOwners(new Set()); setSelectedStatuses(new Set()) }}
                         style={{
                           fontSize: 10, color: 'var(--muted)', background: 'none', border: 'none',
                           cursor: 'pointer', textDecoration: 'underline', whiteSpace: 'nowrap',
@@ -515,7 +567,7 @@ export default function CRMPage() {
                     <td style={tdStyle}>{opp.account}</td>
                     <td style={tdStyle}><StagePill stage={opp.stage} /></td>
                     <td style={{ ...tdStyle, fontFamily: 'IBM Plex Mono, monospace' }}>
-                      ${(opp.value / 1000).toFixed(0)}K
+                      {fmtCurrency(opp.value)}
                     </td>
                     <td style={tdStyle}>{opp.closeDate}</td>
                     <td style={tdStyle}>{opp.status ?? ''}</td>

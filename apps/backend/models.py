@@ -23,6 +23,7 @@ class Opportunity(BaseModel):
     id: str
     name: str
     account: str
+    company: str = ""
     stage: str
     status: str = ""
     value: int

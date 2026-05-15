@@ -8,8 +8,9 @@ from models import CRMData, KPI, PipelineStage, RepWinRate, Opportunity
 # Tries each variant in order; first match wins (case-insensitive)
 _COL_VARIANTS: dict[str, list[str]] = {
     "id":        ["id", "opportunityid", "opportunity_id", "opp_id"],
+    "company":   ["company name", "company", "customercompany", "accountcompany", "account_company"],
     "name":      ["opportunity name", "opportunityname", "name", "opportunity_name", "opp_name", "title"],
-    "account":   ["customer name", "company name", "account", "accountname", "account_name", "client", "clientname", "company"],
+    "account":   ["customer name", "account", "accountname", "account_name", "client", "clientname"],
     "stage":     ["stage", "stagename", "stage_name", "salestage", "pipeline_stage"],
     "status":    ["status"],
     "value":     ["estimated revenue", "actual value", "price submitted", "value", "amount", "dealvalue", "deal_value", "opportunityvalue", "revenue"],
@@ -68,6 +69,16 @@ def _as_date_text(value) -> str:
     return str(value)
 
 
+def _fmt_currency(value: int) -> str:
+    if abs(value) >= 1_000_000_000:
+        return f"${value / 1_000_000_000:.1f}B"
+    if abs(value) >= 1_000_000:
+        return f"${value / 1_000_000:.1f}M"
+    if abs(value) >= 1_000:
+        return f"${value / 1_000:.1f}K"
+    return f"${value}"
+
+
 def _normalize_stage(raw_stage: str) -> str:
     stage = (raw_stage or "").strip()
     lower = stage.lower()
@@ -111,6 +122,7 @@ def get_crm_data_from_lakehouse() -> CRMData:
     for row in rows:
         name = str(_get(row, col_map, "name", "") or "")
         account = str(_get(row, col_map, "account", "") or "")
+        company = str(_get(row, col_map, "company", "") or "")
         stage = _normalize_stage(str(_get(row, col_map, "stage", "") or ""))
         status = str(_get(row, col_map, "status", "") or "").strip()
         status_lower = status.lower()
@@ -120,21 +132,22 @@ def get_crm_data_from_lakehouse() -> CRMData:
         source_id = _get(row, col_map, "id", None)
         identifier = str(source_id) if source_id else _stable_opportunity_id(name, account, close_date, owner)
 
-        # Prefer status as source of truth for closed/won; fall back to stage.
-        is_won = "won" in status_lower
+        # is_won: only when status is exactly 'Won' (case-insensitive)
+        is_won = status_lower == "won"
         is_lost = "lost" in status_lower or "dead" in status_lower
         is_closed = is_won or is_lost or "closed" in status_lower
         if not status:
             stage_lower = stage.lower()
-            is_won = "won" in stage_lower
             is_lost = "lost" in stage_lower or "dead" in stage_lower
-            is_closed = is_won or is_lost or "closed" in stage_lower
+            is_closed = is_lost or "closed" in stage_lower or "won" in stage_lower
+            # is_won intentionally not overridden — only status='Won' counts as won
 
         if identifier not in seen:
             seen[identifier] = Opportunity(
                 id=identifier,
                 name=name,
                 account=account,
+                company=company,
                 stage=stage,
                 status=status,
                 value=value,
@@ -190,10 +203,10 @@ def get_crm_data_from_lakehouse() -> CRMData:
     avg_deal = round(pipeline_value / len(active)) if active else 0
 
     kpis = [
-        KPI(label="Pipeline Value", value=f"${pipeline_value / 1_000_000:.1f}M", delta="", trend="flat"),
-        KPI(label="Won Revenue",    value=f"${won_value / 1_000_000:.1f}M",      delta="", trend="flat"),
-        KPI(label="Win Rate",       value=f"{win_rate}%",                         delta="", trend="flat"),
-        KPI(label="Avg Deal Size",  value=f"${avg_deal / 1_000:.0f}K",            delta="", trend="flat"),
+        KPI(label="Pipeline Value", value=_fmt_currency(pipeline_value), delta="", trend="flat"),
+        KPI(label="Won Revenue",    value=_fmt_currency(won_value),      delta="", trend="flat"),
+        KPI(label="Win Rate",       value=f"{win_rate}%",                delta="", trend="flat"),
+        KPI(label="Avg Deal Size",  value=_fmt_currency(avg_deal),       delta="", trend="flat"),
     ]
 
     return CRMData(kpis=kpis, pipeline=pipeline, repWinRates=rep_win_rates, opportunities=opportunities)

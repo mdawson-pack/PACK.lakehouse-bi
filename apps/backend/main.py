@@ -168,7 +168,7 @@ async def agent(req: AgentRequest):
     if not settings.anthropic_api_key:
         raise HTTPException(500, "ANTHROPIC_API_KEY not set in backend .env")
 
-    use_tool_loop = (req.module == "crm" and settings.data_mode == "lakehouse")
+    use_tool_loop = (req.module == "crm")
 
     # ── Build module data context ─────────────────────────────────────────────
     try:
@@ -263,31 +263,50 @@ Use the above numbers when answering. Do not hallucinate figures not present her
 
                     if block.name == "export_csv":
                         try:
-                            rows = safe_run_sql(query)
-                            if rows:
+                            if settings.data_mode == "mock":
+                                opps = get_crm_data().opportunities
                                 buf = io.StringIO()
                                 writer = csv.writer(buf)
-                                # Header from first row keys if dict, else positional
-                                if isinstance(rows[0], dict):
-                                    writer.writerow(rows[0].keys())
-                                    writer.writerows(r.values() for r in rows)
-                                else:
-                                    writer.writerows(rows)
+                                writer.writerow(["id", "name", "account", "stage", "value", "closeDate", "owner"])
+                                writer.writerows([
+                                    [o.id, o.name, o.account, o.stage, o.value, o.closeDate, o.owner]
+                                    for o in opps
+                                ])
                                 csv_text = buf.getvalue()
                             else:
-                                csv_text = "(no results)"
+                                rows = safe_run_sql(query)
+                                if rows:
+                                    buf = io.StringIO()
+                                    writer = csv.writer(buf)
+                                    if isinstance(rows[0], dict):
+                                        writer.writerow(rows[0].keys())
+                                        writer.writerows(r.values() for r in rows)
+                                    else:
+                                        writer.writerows(rows)
+                                    csv_text = buf.getvalue()
+                                else:
+                                    csv_text = "(no results)"
                             export_id = str(uuid.uuid4())
                             filename = block.input.get("filename", "export")
                             _csv_store[export_id] = (csv_text, filename, time.time())
-                            base_url = settings.base_url.rstrip("/") if hasattr(settings, "base_url") and settings.base_url else "http://localhost:8001"
+                            base_url = settings.base_url.rstrip("/")
                             download_url = f"{base_url}/api/download/csv/{export_id}"
                             result_content = f"CSV ready. Download URL: {download_url}"
                         except Exception as exc:
                             result_content = f"Error generating CSV: {exc}"
                     else:
                         try:
-                            rows = safe_run_sql(query)
-                            result_content = str(rows[:100])
+                            if settings.data_mode == "mock":
+                                opps = get_crm_data().opportunities
+                                result_content = str([
+                                    {"id": o.id, "name": o.name, "account": o.account,
+                                     "stage": o.stage, "value": o.value,
+                                     "closeDate": o.closeDate, "owner": o.owner}
+                                    for o in opps
+                                ])
+                            else:
+                                rows = safe_run_sql(query)
+                                result_content = str(rows[:100])
                         except Exception as exc:
                             result_content = f"Error executing query: {exc}"
 

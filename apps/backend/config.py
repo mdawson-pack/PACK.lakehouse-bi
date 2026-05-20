@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
     data_mode: str = "mock"  # "mock" | "lakehouse"
-    base_url: str = "http://localhost:8001"  # Used to build CSV download links
+    base_url: str = "http://localhost:8000"  # Used to build CSV download links
 
     # Fabric Lakehouse (only needed when data_mode=lakehouse)
     fabric_sql_endpoint: str = ""

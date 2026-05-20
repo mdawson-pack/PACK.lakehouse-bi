@@ -38,10 +38,10 @@ function deriveVisuals(opps: Opportunity[]) {
   const closed   = opps.filter((o) => isClosed(o))
 
   // KPIs — all aggregate over the full filtered set so cards match the visible table rows
-  const pipelineVal = opps.reduce((s, o) => s + o.value, 0)
-  const wonVal      = won.reduce((s, o) => s + o.value, 0)
+  const pipelineVal = active.reduce((s, o) => s + o.value, 0)
+  const wonVal      = won.reduce((s, o) => s + (o.actualValue ?? o.value), 0)
   const winRate     = closed.length ? Math.round(won.length / closed.length * 100) : 0
-  const avgDeal     = opps.length ? Math.round(pipelineVal / opps.length) : 0
+  const avgDeal     = active.length ? Math.round(pipelineVal / active.length) : 0
 
   const kpis: KPI[] = [
     { label: 'Pipeline Value', value: fmtCurrency(pipelineVal), delta: '', trend: 'flat' },
@@ -90,7 +90,7 @@ export default function CRMPage() {
   const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set())
   const [accountQuery, setAccountQuery] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [sortKey, setSortKey] = useState<'name' | 'account' | 'stage' | 'value' | 'closeDate' | 'status' | 'owner'>('closeDate')
+  const [sortKey, setSortKey] = useState<'company' | 'name' | 'account' | 'stage' | 'value' | 'estCloseDate' | 'closeDate' | 'status' | 'owner'>('estCloseDate')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   const tableRef = useRef<HTMLDivElement>(null)
@@ -164,6 +164,7 @@ export default function CRMPage() {
 
     items.sort((a, b) => {
       if (sortKey === 'value') return (a.value - b.value) * factor
+      if (sortKey === 'estCloseDate') return (a.estCloseDate ?? '').localeCompare(b.estCloseDate ?? '') * factor
       if (sortKey === 'closeDate') return a.closeDate.localeCompare(b.closeDate) * factor
       return String(a[sortKey] ?? '').localeCompare(String(b[sortKey] ?? ''), undefined, { sensitivity: 'base' }) * factor
     })
@@ -172,16 +173,18 @@ export default function CRMPage() {
   }, [filteredOpps, sortKey, sortDir])
 
   function exportToCsv() {
-    const headers = ['Opportunity', 'Account', 'Stage', 'Value ($)', 'Close Date', 'Status', 'Owner']
+    const headers = ['Company', 'Opportunity', 'Account', 'Stage', 'Value ($)', 'Est Award Date', 'Close Date', 'Status', 'Owner']
     const escape = (v: string | number) => {
       const s = String(v)
       return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
     }
     const rows = sortedOpps.map((o) => [
+      escape(o.company ?? ''),
       escape(o.name),
       escape(o.account),
       escape(o.stage),
       o.value,
+      escape(o.estCloseDate ?? ''),
       escape(o.closeDate),
       escape(o.status ?? ''),
       escape(o.owner),
@@ -231,7 +234,7 @@ export default function CRMPage() {
     })
   }
 
-  function toggleSort(key: 'name' | 'account' | 'stage' | 'value' | 'closeDate' | 'status' | 'owner') {
+  function toggleSort(key: 'company' | 'name' | 'account' | 'stage' | 'value' | 'estCloseDate' | 'closeDate' | 'status' | 'owner') {
     if (sortKey === key) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
       return
@@ -548,10 +551,12 @@ export default function CRMPage() {
             <thead>
               <tr>
                 {[
+                  { label: 'Company', key: 'company' as const },
                   { label: 'Opportunity', key: 'name' as const },
                   { label: 'Account', key: 'account' as const },
                   { label: 'Stage', key: 'stage' as const },
                   { label: 'Value', key: 'value' as const },
+                  { label: 'Est Award Date', key: 'estCloseDate' as const },
                   { label: 'Close date', key: 'closeDate' as const },
                   { label: 'Status', key: 'status' as const },
                   { label: 'Owner', key: 'owner' as const },
@@ -596,12 +601,14 @@ export default function CRMPage() {
               {sortedOpps.length > 0 ? (
                 sortedOpps.map((opp) => (
                   <tr key={opp.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <td style={tdStyle}>{opp.company ?? ''}</td>
                     <td style={tdStyle}>{opp.name}</td>
                     <td style={tdStyle}>{opp.account}</td>
                     <td style={tdStyle}><StagePill stage={opp.stage} /></td>
                     <td style={{ ...tdStyle, fontFamily: 'IBM Plex Mono, monospace' }}>
                       {fmtCurrency(opp.value)}
                     </td>
+                    <td style={tdStyle}>{opp.estCloseDate ?? ''}</td>
                     <td style={tdStyle}>{opp.closeDate}</td>
                     <td style={tdStyle}>{opp.status ?? ''}</td>
                     <td style={tdStyle}>{opp.owner}</td>
@@ -609,7 +616,7 @@ export default function CRMPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} style={{ ...tdStyle, textAlign: 'center', color: 'var(--muted)', padding: '20px 12px' }}>
+                  <td colSpan={9} style={{ ...tdStyle, textAlign: 'center', color: 'var(--muted)', padding: '20px 12px' }}>
                     No opportunities for {filterSummary || 'the current selection'}
                   </td>
                 </tr>
@@ -655,7 +662,7 @@ function LoadingState() {
 function ErrorState() {
   return (
     <div style={{ padding: 24, color: 'var(--accent4)' }}>
-      Failed to load CRM data. Make sure the backend is running on port 8000.
+      Failed to load CRM data. Make sure the backend is running.
     </div>
   )
 }

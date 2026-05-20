@@ -27,6 +27,8 @@ export interface Opportunity {
   stage: 'Qualify' | 'Propose' | 'Close'
   status?: string
   value: number
+  actualValue?: number
+  estCloseDate?: string
   closeDate: string
   owner: string
 }

@@ -40,8 +40,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{current.subtitle}</div>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <span style={badgeStyle}>FY 2025 · Q2</span>
-            <span style={badgeStyle}>All Regions</span>
             <button
               onClick={() => setTheme((t) => t === 'dark' ? 'light' : 'dark')}
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -68,15 +66,5 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
     </div>
   )
-}
-
-const badgeStyle: React.CSSProperties = {
-  fontSize: 10,
-  fontFamily: 'IBM Plex Mono, monospace',
-  padding: '3px 8px',
-  borderRadius: 4,
-  border: '1px solid var(--border)',
-  color: 'var(--muted)',
-  background: 'var(--card)',
 }
 

@@ -8,19 +8,21 @@ async function get<T>(path: string): Promise<T> {
   return res.json()
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   })
   if (!res.ok) throw new Error(`API error ${res.status}: ${path}`)
   return res.json()
 }
 
 export const api = {
-  crm:     { getData: ()  => get<CRMData>('/api/crm') },
-  finance: { getData: ()  => get<FinanceData>('/api/finance') },
-  ops:     { getData: ()  => get<OpsData>('/api/ops') },
-  agent:   { send: (req: AgentRequest) => post<AgentResponse>('/api/agent', req) },
+  crm:       { getData: ()  => get<CRMData>('/api/crm') },
+  finance:   { getData: ()  => get<FinanceData>('/api/finance') },
+  ops:       { getData: ()  => get<OpsData>('/api/ops') },
+  companies: { list: ()    => get<string[]>('/api/companies') },
+  agent:     { send: (req: AgentRequest, signal?: AbortSignal) => post<AgentResponse>('/api/agent', req, signal) },
 }

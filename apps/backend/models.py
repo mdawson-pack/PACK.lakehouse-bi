@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, Optional
 
 # ── Shared ────────────────────────────────────────────────────────────────────
 class KPI(BaseModel):
@@ -27,6 +27,8 @@ class Opportunity(BaseModel):
     stage: str
     status: str = ""
     value: int
+    actualValue: Optional[int] = None
+    estCloseDate: Optional[str] = None
     closeDate: str
     owner: str
 

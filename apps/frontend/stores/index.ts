@@ -27,15 +27,11 @@ export const useAgentStore = create<AgentStore>((set) => ({
 
 // ── Filter store ──────────────────────────────────────────────────────────────
 interface FilterStore {
-  quarter: string
-  region: string
-  setQuarter: (q: string) => void
-  setRegion: (r: string) => void
+  companies: string[]
+  setCompanies: (companies: string[]) => void
 }
 
 export const useFilterStore = create<FilterStore>((set) => ({
-  quarter: 'Q2 FY2025',
-  region:  'All Regions',
-  setQuarter: (quarter) => set({ quarter }),
-  setRegion:  (region)  => set({ region }),
+  companies: [],
+  setCompanies: (companies) => set({ companies }),
 }))

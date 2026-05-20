@@ -13,8 +13,10 @@ _COL_VARIANTS: dict[str, list[str]] = {
     "account":   ["customer name", "account", "accountname", "account_name", "client", "clientname"],
     "stage":     ["stage", "stagename", "stage_name", "salestage", "pipeline_stage"],
     "status":    ["status"],
-    "value":     ["estimated revenue", "actual value", "price submitted", "value", "amount", "dealvalue", "deal_value", "opportunityvalue", "revenue"],
-    "closeDate": ["estimated close date", "actual close date", "closedate", "close_date", "expectedclosedate", "expected_close_date"],
+    "value":        ["estimated revenue", "price submitted", "value", "amount", "dealvalue", "deal_value", "opportunityvalue", "revenue"],
+    "actual_value": ["actual value", "actualvalue", "actual_value"],
+    "estCloseDate": ["estimated close date", "expectedclosedate", "expected_close_date"],
+    "closeDate":    ["actual close date", "closedate", "close_date"],
     "owner":     ["owner", "ownername", "owner_name", "assignedto", "salesrep", "rep"],
 }
 
@@ -102,6 +104,38 @@ def _stable_opportunity_id(name: str, account: str, close_date: str, owner: str)
     return hashlib.sha1(payload).hexdigest()[:16]
 
 
+def get_column_names_from_lakehouse() -> list[str]:
+    """Return the raw column names from Revenue Opportunity for diagnostics."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT TOP 1 * FROM [dbo].[Revenue Opportunity]")
+        return [d[0] for d in cursor.description]
+    finally:
+        conn.close()
+
+
+def get_distinct_companies_from_lakehouse() -> list[str]:
+    """Return sorted distinct non-empty company names from Revenue Opportunity."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT TOP 1 * FROM [dbo].[Revenue Opportunity]")
+        actual_cols = [d[0] for d in cursor.description]
+        col_map = _resolve_columns(actual_cols)
+        company_col = col_map.get("company") or col_map.get("account")
+        if not company_col:
+            return []
+        cursor.execute(
+            f"SELECT DISTINCT [{company_col}] FROM [dbo].[Revenue Opportunity] "
+            f"WHERE [{company_col}] IS NOT NULL AND [{company_col}] != '' "
+            f"ORDER BY [{company_col}]"
+        )
+        return [str(row[0]) for row in cursor.fetchall() if row[0]]
+    finally:
+        conn.close()
+
+
 def get_crm_data_from_lakehouse() -> CRMData:
     conn = get_connection()
     try:
@@ -109,6 +143,8 @@ def get_crm_data_from_lakehouse() -> CRMData:
         cursor.execute("SELECT * FROM [dbo].[Revenue Opportunity]")
         actual_cols = [d[0] for d in cursor.description]
         col_map = _resolve_columns(actual_cols)
+        actual_value_col = col_map.get("actual_value")
+        actual_value_idx = actual_cols.index(actual_value_col) if actual_value_col else None
         rows = cursor.fetchall()
     finally:
         conn.close()
@@ -117,6 +153,7 @@ def get_crm_data_from_lakehouse() -> CRMData:
     won_ids: set[str] = set()
     lost_ids: set[str] = set()
     closed_ids: set[str] = set()
+    won_actual_values: dict[str, int] = {}
     for row in rows:
         name = str(_get(row, col_map, "name", "") or "")
         account = str(_get(row, col_map, "account", "") or "")
@@ -124,9 +161,11 @@ def get_crm_data_from_lakehouse() -> CRMData:
         stage = _normalize_stage(str(_get(row, col_map, "stage", "") or ""))
         status = str(_get(row, col_map, "status", "") or "").strip()
         status_lower = status.lower()
+        est_close_date = _as_date_text(_get(row, col_map, "estCloseDate", ""))
         close_date = _as_date_text(_get(row, col_map, "closeDate", ""))
         owner = str(_get(row, col_map, "owner", "") or "")
         value = _as_int_currency(_get(row, col_map, "value", 0))
+        actual_value = _as_int_currency(row[actual_value_idx]) if actual_value_idx is not None else 0
         source_id = _get(row, col_map, "id", None)
         identifier = str(source_id) if source_id else _stable_opportunity_id(name, account, close_date, owner)
 
@@ -149,11 +188,15 @@ def get_crm_data_from_lakehouse() -> CRMData:
                 stage=stage,
                 status=status,
                 value=value,
+                actualValue=actual_value if actual_value_idx is not None else None,
+                estCloseDate=est_close_date or None,
                 closeDate=close_date,
                 owner=owner,
             )
             if is_won:
                 won_ids.add(identifier)
+                if actual_value_idx is not None:
+                    won_actual_values[identifier] = actual_value
             if is_lost:
                 lost_ids.add(identifier)
             if is_closed:
@@ -195,7 +238,11 @@ def get_crm_data_from_lakehouse() -> CRMData:
 
     # KPIs derived from the full dataset
     pipeline_value = sum(o.value for o in active)
-    won_value = sum(o.value for o in won)
+    won_value = (
+        sum(won_actual_values.get(oid, 0) for oid in won_ids)
+        if actual_value_idx is not None
+        else sum(o.value for o in won)
+    )
     closed_count = len(closed_ids)
     win_rate = round(len(won) / closed_count * 100) if closed_count else 0
     avg_deal = round(pipeline_value / len(active)) if active else 0

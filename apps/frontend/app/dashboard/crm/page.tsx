@@ -299,7 +299,7 @@ export default function CRMPage() {
                 <div style={{
                   background: 'var(--card)',
                   border: '1px solid var(--border)',
-                  borderTop: '1px solid rgba(255,255,255,0.04)',
+                  borderTop: '1px solid var(--border)',
                   borderRadius: '0 0 8px 8px',
                   boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
                   padding: '14px 14px 12px',
@@ -317,7 +317,7 @@ export default function CRMPage() {
                         return (
                           <button key={account} onClick={() => toggleAccount(account)} style={{
                             fontSize: 10, padding: '3px 10px', borderRadius: 20,
-                            border: sel ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.12)',
+                            border: sel ? '1px solid var(--accent)' : '1px solid var(--border)',
                             background: sel ? 'var(--accent)' : 'transparent',
                             color: sel ? '#fff' : 'var(--muted)',
                             cursor: 'pointer', fontWeight: sel ? 600 : 400,
@@ -342,7 +342,7 @@ export default function CRMPage() {
                       placeholder="Search account or opportunity name"
                       style={{
                         flex: '0 1 320px', fontSize: 11, color: 'var(--text)',
-                        background: 'var(--panel)', border: '1px solid rgba(255,255,255,0.12)',
+                        background: 'var(--panel)', border: '1px solid var(--border)',
                         borderRadius: 6, padding: '6px 10px', outline: 'none',
                       }}
                     />
@@ -359,7 +359,7 @@ export default function CRMPage() {
                         return (
                           <button key={stage} onClick={() => toggleStage(stage)} style={{
                             fontSize: 10, padding: '3px 10px', borderRadius: 20,
-                            border: sel ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.12)',
+                            border: sel ? '1px solid var(--accent)' : '1px solid var(--border)',
                             background: sel ? 'var(--accent)' : 'transparent',
                             color: sel ? '#fff' : 'var(--muted)',
                             cursor: 'pointer', fontWeight: sel ? 600 : 400,
@@ -383,7 +383,7 @@ export default function CRMPage() {
                         return (
                           <button key={status} onClick={() => toggleStatus(status)} style={{
                             fontSize: 10, padding: '3px 10px', borderRadius: 20,
-                            border: sel ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.12)',
+                            border: sel ? '1px solid var(--accent)' : '1px solid var(--border)',
                             background: sel ? 'var(--accent)' : 'transparent',
                             color: sel ? '#fff' : 'var(--muted)',
                             cursor: 'pointer', fontWeight: sel ? 600 : 400,
@@ -407,7 +407,7 @@ export default function CRMPage() {
                         return (
                           <button key={owner} onClick={() => toggleOwner(owner)} style={{
                             fontSize: 10, padding: '3px 10px', borderRadius: 20,
-                            border: sel ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.12)',
+                            border: sel ? '1px solid var(--accent)' : '1px solid var(--border)',
                             background: sel ? 'var(--accent)' : 'transparent',
                             color: sel ? '#fff' : 'var(--muted)',
                             cursor: 'pointer', fontWeight: sel ? 600 : 400,
@@ -462,7 +462,7 @@ export default function CRMPage() {
                     <div style={{ fontSize: 10, color: 'var(--muted)', width: 80, flexShrink: 0, textAlign: 'right' }}>
                       {row.stage}
                     </div>
-                    <div style={{ flex: 1, height: 18, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ flex: 1, height: 18, background: 'var(--card2)', borderRadius: 3, overflow: 'hidden' }}>
                       <div style={{
                         height: '100%', borderRadius: 3,
                         width: `${row.pct}%`, background: row.color,
@@ -493,7 +493,7 @@ export default function CRMPage() {
                     <div style={{ fontSize: 10, color: 'var(--muted)', width: 60, flexShrink: 0, textAlign: 'right' }}>
                       {rep.name}
                     </div>
-                    <div style={{ flex: 1, height: 14, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ flex: 1, height: 14, background: 'var(--card2)', borderRadius: 3, overflow: 'hidden' }}>
                       <div style={{
                         height: '100%', borderRadius: 3,
                         width: `${rep.rate}%`,
@@ -600,12 +600,12 @@ export default function CRMPage() {
             <tbody>
               {sortedOpps.length > 0 ? (
                 sortedOpps.map((opp) => (
-                  <tr key={opp.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <tr key={opp.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={tdStyle}>{opp.company ?? ''}</td>
                     <td style={tdStyle}>{opp.name}</td>
                     <td style={tdStyle}>{opp.account}</td>
                     <td style={tdStyle}><StagePill stage={opp.stage} /></td>
-                    <td style={{ ...tdStyle, fontFamily: 'IBM Plex Mono, monospace' }}>
+                    <td style={{ ...tdStyle, fontFamily: 'IBM Plex Mono, monospace' }} title={`$${opp.value.toLocaleString()}`}>
                       {fmtCurrency(opp.value)}
                     </td>
                     <td style={tdStyle}>{opp.estCloseDate ?? ''}</td>
@@ -689,5 +689,5 @@ const chartTitleStyle: React.CSSProperties = {
 
 const tdStyle: React.CSSProperties = {
   padding: '7px 12px', color: 'var(--text)',
-  borderBottom: '1px solid rgba(255,255,255,0.04)',
+  borderBottom: '1px solid var(--border)',
 }

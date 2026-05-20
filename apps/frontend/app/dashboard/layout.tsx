@@ -1,8 +1,20 @@
 'use client'
 
+import Link from 'next/link'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
+
+const breadcrumbLabels: Record<string, string> = {
+  dashboard:    'Home',
+  crm:          'CRM',
+  opportunities:'Opportunities',
+  accounts:     'Account Health',
+  activity:     'Activity & Engagement',
+  forecasting:  'Forecasting',
+  finance:      'Finance & Revenue',
+  ops:          'Operations',
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -12,13 +24,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
-  const moduleConfig: Record<string, { title: string; subtitle: string }> = {
-    '/dashboard/crm':     { title: 'CRM Sales Opportunities', subtitle: 'Fabric Lakehouse · Dynamics 365' },
-    '/dashboard/finance': { title: 'Finance & Revenue',       subtitle: 'Fabric Lakehouse · GL & Forecasts' },
-    '/dashboard/ops':     { title: 'Operations & Production', subtitle: 'Fabric Lakehouse · Production runs' },
-  }
-
-  const current = moduleConfig[pathname] ?? moduleConfig['/dashboard/crm']
+  const segments = pathname.split('/').filter(Boolean)
+  const breadcrumbs = segments.map((seg, i) => ({
+    path: '/' + segments.slice(0, i + 1).join('/'),
+    label: breadcrumbLabels[seg] ?? seg,
+    isLast: i === segments.length - 1,
+  }))
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -35,9 +46,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           background: 'var(--panel)',
           flexShrink: 0,
         }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{current.title}</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{current.subtitle}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {breadcrumbs.map((crumb, i) => (
+              <span key={crumb.path} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {i > 0 && (
+                  <span style={{ color: 'var(--muted)', opacity: 0.5, fontSize: 12, userSelect: 'none' }}>›</span>
+                )}
+                {crumb.isLast ? (
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{crumb.label}</span>
+                ) : (
+                  <Link href={crumb.path} style={{ fontSize: 12, color: 'var(--muted)', textDecoration: 'none' }}>
+                    {crumb.label}
+                  </Link>
+                )}
+              </span>
+            ))}
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <button
